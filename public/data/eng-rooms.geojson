@@ -1,0 +1,41 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": { "id": "eng-01-room-101", "name": "Office 101", "floor": 1, "type": "office" },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [17.0836, -22.5676],
+          [17.08375, -22.5676],
+          [17.08375, -22.56775],
+          [17.0836, -22.56775],
+          [17.0836, -22.5676]
+        ]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": { "id": "eng-01-room-102", "name": "Office 102", "floor": 1, "type": "office" },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [17.0838, -22.5676],
+          [17.08395, -22.5676],
+          [17.08395, -22.56775],
+          [17.0838, -22.56775],
+          [17.0838, -22.5676]
+        ]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": { "id": "eng-01-entrance", "name": "Entrance", "floor": 1, "type": "entrance" },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [17.0835, -22.5678]
+      }
+    }
+  ]
+}

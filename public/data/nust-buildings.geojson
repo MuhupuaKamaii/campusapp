@@ -1,0 +1,127 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "eng-01",
+        "name": "Engineering Building",
+        "height": 25,
+        "color": "#4A90E2",
+        "building_type": "academic"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [17.0855, -22.5705],
+          [17.0865, -22.5705],
+          [17.0865, -22.5715],
+          [17.0855, -22.5715],
+          [17.0855, -22.5705]
+        ]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "lib-01",
+        "name": "NUST Library",
+        "height": 20,
+        "color": "#50C878",
+        "building_type": "academic"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [17.0875, -22.5705],
+          [17.0885, -22.5705],
+          [17.0885, -22.5715],
+          [17.0875, -22.5715],
+          [17.0875, -22.5705]
+        ]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "fhas-01",
+        "name": "Faculty of Health and Applied Sciences",
+        "height": 22,
+        "color": "#FF6B6B",
+        "building_type": "academic"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [17.0885, -22.5690],
+          [17.0895, -22.5690],
+          [17.0895, -22.5700],
+          [17.0885, -22.5700],
+          [17.0885, -22.5690]
+        ]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "bio-01",
+        "name": "Biodiversity Research Centre",
+        "height": 15,
+        "color": "#9B59B6",
+        "building_type": "research"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [17.0855, -22.5685],
+          [17.0865, -22.5685],
+          [17.0865, -22.5695],
+          [17.0855, -22.5695],
+          [17.0855, -22.5685]
+        ]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "admin-01",
+        "name": "Administration Building",
+        "height": 18,
+        "color": "#F39C12",
+        "building_type": "admin"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [17.0835, -22.5700],
+          [17.0845, -22.5700],
+          [17.0845, -22.5710],
+          [17.0835, -22.5710],
+          [17.0835, -22.5700]
+        ]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "lower-campus-01",
+        "name": "Lower Campus Building",
+        "height": 18,
+        "color": "#FF9800",
+        "building_type": "academic"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [17.0840, -22.5740],
+          [17.0850, -22.5740],
+          [17.0850, -22.5750],
+          [17.0840, -22.5750],
+          [17.0840, -22.5740]
+        ]]
+      }
+    }
+  ]
+}
+
+
