@@ -1,6 +1,6 @@
 // resources/js/pages/ShowMap.tsx
 import React from 'react';
-import MapComponent from '@/components/MapComponent'; // Using '@' alias for resources/js
+import MapWithAnimatedPath from '@/components/MapWithAnimatedPath';
 
 export default function ShowMap() {
     return (
@@ -10,7 +10,7 @@ export default function ShowMap() {
             {/* Your MapComponent will render here.
               The height/width (100% / 500px) is set inside MapComponent.tsx
             */}
-            <MapComponent />
+            <MapWithAnimatedPath />
         </div>
     );
 }
