@@ -1,5 +1,6 @@
 // resources/js/Components/MapComponent.jsx
 import React, { useRef, useEffect, JSX, useState, useImperativeHandle, forwardRef } from 'react';
+import { knownLocations } from './knownLocations';
 import maplibregl, { Map, NavigationControl, GeolocateControl, FullscreenControl, Popup } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css'; // Import Maplibre CSS for map components
 
@@ -550,7 +551,7 @@ const MapComponent = forwardRef<MapComponentRef>((props, ref) => {
                                         (map.current!.getSource('walkways') as any).setData(j);
                                     }
                                     if (!map.current!.getLayer('walkways')) {
-                                        map.current!.addLayer({ id: 'walkways', type: 'line', source: 'walkways', paint: { 'line-color': '#9CA3AF', 'line-width': 1.5, 'line-opacity': 0.7 } } as any);
+                                        map.current!.addLayer({ id: 'walkways', type: 'line', source: 'walkways', paint: { 'line-color': '#d8dee8', 'line-width': 1.5, 'line-opacity': 0.35 } } as any);
                                     }
                                 } catch {}
                                 try {
@@ -595,7 +596,7 @@ const MapComponent = forwardRef<MapComponentRef>((props, ref) => {
                                     (map.current!.getSource('walkways') as any).setData(gj);
                                 }
                                 if (!map.current!.getLayer('walkways')) {
-                                    map.current!.addLayer({ id: 'walkways', type: 'line', source: 'walkways', paint: { 'line-color': '#9CA3AF', 'line-width': 1.5, 'line-opacity': 0.7 } } as any);
+                                    map.current!.addLayer({ id: 'walkways', type: 'line', source: 'walkways', paint: { 'line-color': '#9CA3AF', 'line-width': 1.5, 'line-opacity': 0.35 } } as any);
                                 }
                             } catch {}
                             // prune edges against buildings if dataset present
@@ -878,6 +879,11 @@ const MapComponent = forwardRef<MapComponentRef>((props, ref) => {
                     class WalkControl {
                         _c: HTMLElement | null = null;
                         onAdd() {
+                            // Debug: check if knownLocations is loaded
+                            console.log('WalkControl.onAdd() called');
+                            console.log('knownLocations available:', knownLocations);
+                            console.log('knownLocations length:', knownLocations?.length || 0);
+                            
                             const c = document.createElement('div');
                             c.className = 'maplibregl-ctrl';
                             c.style.background = 'transparent';
@@ -892,6 +898,7 @@ const MapComponent = forwardRef<MapComponentRef>((props, ref) => {
                             c.style.boxShadow = 'none';
                             c.style.maxWidth = 'min(95vw, 980px)';
                             c.style.overflow = 'visible';
+                            c.style.position = 'relative';
 
                             const mk = (t: string) => {
                                 const b = document.createElement('div');
@@ -924,7 +931,10 @@ const MapComponent = forwardRef<MapComponentRef>((props, ref) => {
                                 return b;
                             };
 
-                            // Inputs
+                            // Start input with autocomplete
+                            const startDiv = document.createElement('div');
+                            startDiv.style.position = 'relative';
+                            startDiv.style.zIndex = '1100';
                             const is = document.createElement('input');
                             is.type = 'text'; is.placeholder = 'Start: building or street name';
                             is.style.padding = '8px 10px';
@@ -937,6 +947,79 @@ const MapComponent = forwardRef<MapComponentRef>((props, ref) => {
                             is.style.transition = 'box-shadow 120ms ease-in-out, border-color 120ms ease-in-out';
                             is.onfocus = () => { is.style.borderColor = '#60A5FA'; is.style.boxShadow = '0 0 0 3px rgba(59,130,246,0.25)'; };
                             is.onblur = () => { is.style.borderColor = '#e5e7eb'; is.style.boxShadow = 'inset 0 1px 2px rgba(0,0,0,0.04)'; };
+                            startDiv.appendChild(is);
+                            const startDropdown = document.createElement('ul');
+                            startDropdown.style.position = 'absolute';
+                            startDropdown.style.left = '0';
+                            startDropdown.style.right = '0';
+                            startDropdown.style.top = '40px';
+                            startDropdown.style.background = '#fff';
+                            startDropdown.style.border = '1px solid #e5e7eb';
+                            startDropdown.style.borderRadius = '8px';
+                            startDropdown.style.zIndex = '2000';
+                            startDropdown.style.listStyle = 'none';
+                            startDropdown.style.padding = '0';
+                            startDropdown.style.margin = '0';
+                            startDropdown.style.maxHeight = '200px';
+                            startDropdown.style.overflowY = 'auto';
+                            startDropdown.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)';
+                            startDropdown.style.display = 'none';
+                            startDiv.appendChild(startDropdown);
+                            is.addEventListener('input', function (ev) {
+                                const val = is.value.trim().toLowerCase();
+                                startDropdown.innerHTML = '';
+                                console.log('Start input changed:', val);
+                                if (!val) { 
+                                    console.log('Start dropdown hidden (empty input)');
+                                    startDropdown.style.display = 'none'; 
+                                    return; 
+                                }
+                                const matches = knownLocations.filter(loc => loc.name.toLowerCase().includes(val));
+                                console.log('Start matches found:', matches.length);
+                                if (matches.length === 0) { 
+                                    console.log('Start dropdown hidden (no matches)');
+                                    startDropdown.style.display = 'none'; 
+                                    return; 
+                                }
+                                matches.forEach(loc => {
+                                    const li = document.createElement('li');
+                                    li.textContent = loc.name;
+                                    li.style.padding = '8px 12px';
+                                    li.style.cursor = 'pointer';
+                                    li.style.borderBottom = '1px solid #f3f4f6';
+                                    li.addEventListener('mouseenter', () => { li.style.background = '#f3f4f6'; });
+                                    li.addEventListener('mouseleave', () => { li.style.background = 'transparent'; });
+                                    li.addEventListener('mousedown', (event) => {
+                                        event.preventDefault();
+                                        is.value = loc.name;
+                                        startDropdown.style.display = 'none';
+                                        setPoint('start', loc.coordinates[0], loc.coordinates[1]);
+                                    });
+                                    startDropdown.appendChild(li);
+                                });
+                                console.log('Start dropdown showing with', matches.length, 'options');
+                                startDropdown.style.display = 'block';
+                            });
+                            is.addEventListener('focus', () => {
+                                console.log('Start input focused');
+                                // Show dropdown again if input has value
+                                if (is.value.trim().length > 0) {
+                                    startDropdown.style.display = 'block';
+                                }
+                            });
+                            // Handle outside clicks using event delegation with proper type checking
+                            const startClickHandler = (e: any) => {
+                                if (e.target instanceof Node && !startDiv.contains(e.target)) {
+                                    console.log('Start dropdown closed by outside click');
+                                    startDropdown.style.display = 'none';
+                                }
+                            };
+                            document.addEventListener('click', startClickHandler);
+
+                            // End input with autocomplete
+                            const endDiv = document.createElement('div');
+                            endDiv.style.position = 'relative';
+                            endDiv.style.zIndex = '1100';
                             const ie = document.createElement('input');
                             ie.type = 'text'; ie.placeholder = 'Destination: building or street name';
                             ie.style.padding = '8px 10px';
@@ -949,6 +1032,74 @@ const MapComponent = forwardRef<MapComponentRef>((props, ref) => {
                             ie.style.transition = 'box-shadow 120ms ease-in-out, border-color 120ms ease-in-out';
                             ie.onfocus = () => { ie.style.borderColor = '#60A5FA'; ie.style.boxShadow = '0 0 0 3px rgba(59,130,246,0.25)'; };
                             ie.onblur = () => { ie.style.borderColor = '#e5e7eb'; ie.style.boxShadow = 'inset 0 1px 2px rgba(0,0,0,0.04)'; };
+                            endDiv.appendChild(ie);
+                            const endDropdown = document.createElement('ul');
+                            endDropdown.style.position = 'absolute';
+                            endDropdown.style.left = '0';
+                            endDropdown.style.right = '0';
+                            endDropdown.style.top = '40px';
+                            endDropdown.style.background = '#fff';
+                            endDropdown.style.border = '1px solid #e5e7eb';
+                            endDropdown.style.borderRadius = '8px';
+                            endDropdown.style.zIndex = '2000';
+                            endDropdown.style.listStyle = 'none';
+                            endDropdown.style.padding = '0';
+                            endDropdown.style.margin = '0';
+                            endDropdown.style.maxHeight = '200px';
+                            endDropdown.style.overflowY = 'auto';
+                            endDropdown.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)';
+                            endDropdown.style.display = 'none';
+                            endDiv.appendChild(endDropdown);
+                            ie.addEventListener('input', function (ev) {
+                                const val = ie.value.trim().toLowerCase();
+                                endDropdown.innerHTML = '';
+                                console.log('End input changed:', val);
+                                if (!val) { 
+                                    console.log('End dropdown hidden (empty input)');
+                                    endDropdown.style.display = 'none'; 
+                                    return; 
+                                }
+                                const matches = knownLocations.filter(loc => loc.name.toLowerCase().includes(val));
+                                console.log('End matches found:', matches.length);
+                                if (matches.length === 0) { 
+                                    console.log('End dropdown hidden (no matches)');
+                                    endDropdown.style.display = 'none'; 
+                                    return; 
+                                }
+                                matches.forEach(loc => {
+                                    const li = document.createElement('li');
+                                    li.textContent = loc.name;
+                                    li.style.padding = '8px 12px';
+                                    li.style.cursor = 'pointer';
+                                    li.style.borderBottom = '1px solid #f3f4f6';
+                                    li.addEventListener('mouseenter', () => { li.style.background = '#f3f4f6'; });
+                                    li.addEventListener('mouseleave', () => { li.style.background = 'transparent'; });
+                                    li.addEventListener('mousedown', (event) => {
+                                        event.preventDefault();
+                                        ie.value = loc.name;
+                                        endDropdown.style.display = 'none';
+                                        setPoint('end', loc.coordinates[0], loc.coordinates[1]);
+                                    });
+                                    endDropdown.appendChild(li);
+                                });
+                                console.log('End dropdown showing with', matches.length, 'options');
+                                endDropdown.style.display = 'block';
+                            });
+                            ie.addEventListener('focus', () => {
+                                console.log('End input focused');
+                                // Show dropdown again if input has value
+                                if (ie.value.trim().length > 0) {
+                                    endDropdown.style.display = 'block';
+                                }
+                            });
+                            // Handle outside clicks using event delegation with proper type checking
+                            const endClickHandler = (e: any) => {
+                                if (e.target instanceof Node && !endDiv.contains(e.target)) {
+                                    console.log('End dropdown closed by outside click');
+                                    endDropdown.style.display = 'none';
+                                }
+                            };
+                            document.addEventListener('click', endClickHandler);
 
                             const bs = mk('Start');
                             const bc = mk('Clear');

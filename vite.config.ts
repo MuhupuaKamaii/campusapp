@@ -21,6 +21,11 @@ export default defineConfig({
             formVariants: true,
         }),
     ],
+    build: {
+        rollupOptions: {
+            external: ['mapbox-gl'],
+        },
+    },
     esbuild: {
         jsx: 'automatic',
     },
