@@ -17,7 +17,7 @@ return new class extends Migration
             $table->integer('x_coordinate');
             $table->integer('y_coordinate');
             $table->string('name')->nullable();
-            $table->enum('type', ['room', 'hallway', 'stairs']);
+            $table->enum('type', ['room', 'hallway', 'stairs', 'entrance', 'service', 'study', 'lab', 'office', 'restroom', 'food', 'rest', 'collection', 'walkway', 'exit']);
             $table->timestamps();
         });
     }

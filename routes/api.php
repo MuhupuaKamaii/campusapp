@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\IndoorNavigationController;
+use App\Http\Controllers\PathController;
 use App\Http\Controllers\WifiController;
 
 // ============================================
@@ -14,6 +15,11 @@ Route::post('/indoor-route', [IndoorNavigationController::class, 'calculateRoute
 Route::get('/locations/search', [IndoorNavigationController::class, 'searchLocations']);
 Route::post('/save-geojson', [IndoorNavigationController::class, 'saveGeoJSON']);
 Route::post('/seed-floor-locations', [IndoorNavigationController::class, 'seedFloorLocations']);
+
+// Pathfinding Routes - Using PathController
+Route::get('/floor/{floorId}/locations', [PathController::class, 'getFloorLocations']);
+Route::get('/floor/{floorId}/paths', [PathController::class, 'getFloorPaths']);
+Route::get('/path/{startId}/{endId}', [PathController::class, 'calculatePath']);
 
 // ============================================
 // WiFi Scanning Routes
@@ -47,3 +53,15 @@ Route::post('/user-position', [WifiController::class, 'recordUserPosition']);
 
 // Get calibration statistics for a floor
 Route::get('/floor/{floorId}/calibration-stats', [WifiController::class, 'getCalibrationStats']);
+
+// ============================================
+// Wayfinding & Pathfinding Routes
+// ============================================
+// Get all locations for a specific floor
+Route::get('/floor/{floorId}/locations', [PathController::class, 'getFloorLocations']);
+
+// Get all path connections for a specific floor
+Route::get('/floor/{floorId}/paths', [PathController::class, 'getFloorPaths']);
+
+// Calculate shortest path between two locations
+Route::get('/path/{startId}/{endId}', [PathController::class, 'calculatePath']);

@@ -30,6 +30,12 @@ class IndoorNavigationController extends Controller
         
         return response()->json($floors);
     }
+
+    public function getFloorLocations($floorId)
+{
+    $locations = Location::where('floor_id', $floorId)->get();
+    return response()->json($locations);
+}
     /**
      * Save extracted GeoJSON files to public folder
      */
@@ -204,7 +210,7 @@ class IndoorNavigationController extends Controller
         ];
         return $levelNames[$level] ?? "Floor {$level}";
     }
-}
+
     /**
      * Get graph data (nodes and paths) for a specific floor, including PDF path
      */
@@ -339,3 +345,4 @@ class IndoorNavigationController extends Controller
 
         return response()->json($results);
     }
+}

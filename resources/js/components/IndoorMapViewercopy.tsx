@@ -1,6 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
 import '../css/AnimatedPath.css';
-
 // Interfaces passed from parent
 interface Location {
     id: number;
@@ -284,17 +283,32 @@ export default function IndoorMapViewer({
                         );
                     })}
 
-                    {/* Highlighted Route */}
-                    {highlightedPath.length > 1 && (
-                        <g>
-                            {highlightedPath.map((nodeIdx, index) => {
-                                if (index === highlightedPath.length - 1) return null;
-                                const from = nodes[nodeIdx];
-                                const to = nodes[highlightedPath[index + 1]];
-                                if (!from || !to) return null;
+                    {/* Highlighted Route - Dashed Animation */}
+                    {highlightedPath && highlightedPath.length > 1 && (
+                        <g id="navigation-path-layer">
+                            {highlightedPath.map((nodeId, index) => {
+                                // We need a pair of nodes to draw a line, so skip the first index
+                                if (index === 0) return null;
+                                
+                                const prevNode = nodes?.find(n => n.id === highlightedPath[index - 1]);
+                                const currNode = nodes?.find(n => n.id === nodeId);
+
+                                // If we can't find one of the nodes in our data, don't draw
+                                if (!prevNode || !currNode) return null;
+
                                 return (
-                                    <line key={`highlight-${index}`} x1={from.x_coordinate} y1={from.y_coordinate}
-                                        x2={to.x_coordinate} y2={to.y_coordinate} stroke="#22c55e" strokeWidth="6" strokeLinecap="round" opacity="0.8" />
+                                    <line
+                                        key={`path-segment-${index}`}
+                                        x1={prevNode.x_coordinate}
+                                        y1={prevNode.y_coordinate}
+                                        x2={currNode.x_coordinate}
+                                        y2={currNode.y_coordinate}
+                                        stroke="#3b82f6"
+                                        strokeWidth="8"
+                                        strokeLinecap="round"
+                                        strokeDasharray="1, 15"
+                                        className="animate-wayfinding-path" 
+                                    />
                                 );
                             })}
                         </g>
@@ -359,6 +373,44 @@ export default function IndoorMapViewer({
                             <circle r="6" fill="#ef4444" stroke="white" strokeWidth="2" />
                         </g>
                     )}
+
+                    {/* Navigation Nodes */}
+                    {nodes.map((location, index) => {
+                        const isHighlighted = highlightedPath.includes(index);
+                        const isStart = selectedStart === index;
+                        const isEnd = selectedEnd === index;
+                        const color = getNodeColor(location, index);
+                        const radius = isStart || isEnd ? 12 : (isHighlighted ? 10 : 8);
+
+                        return (
+                            <g key={index} data-node>
+                                <circle cx={location.x_coordinate} cy={location.y_coordinate} r={radius + 6}
+                                    fill="transparent" pointerEvents="all" style={{ cursor: 'pointer' }}
+                                    onClick={() => handleNodeClick(location)} />
+                                    
+                                {(isStart || isEnd) && (
+                                    <circle cx={location.x_coordinate} cy={location.y_coordinate} r={radius + 3}
+                                        fill="none" stroke="white" strokeWidth="3" opacity="0.8" />
+                                )}
+                                
+                                <circle cx={location.x_coordinate} cy={location.y_coordinate} r={radius}
+                                    fill={color} stroke="white" strokeWidth={isStart || isEnd ? '2' : '1'} opacity="0.95" />
+                                
+                                {(isStart || isEnd) && (
+                                    <>
+                                        <rect x={location.x_coordinate - 28} y={location.y_coordinate - 28} width="56" height="20" rx="6"
+                                            fill={isStart ? '#22c55e' : '#8b5cf6'} opacity="0.95" />
+                                        <text x={location.x_coordinate} y={location.y_coordinate - 15} textAnchor="middle" 
+                                            fill="white" fontSize="11" fontWeight="bold">
+                                            {isStart ? 'START' : 'END'}
+                                        </text>
+                                    </>
+                                )}
+                                
+                                <title>{location.name} ({location.type})</title>
+                            </g>
+                        );
+                    })}
                 </svg>
 
                 {/* Legend */}

@@ -1,7 +1,9 @@
-/*
+/**
  * WiFi Access Point Manager Component
+ * 
  * Provides CRUD (Create, Read, Update, Delete) functionality for managing
  * WiFi access point locations and characteristics on a specific floor.
+ * 
  * Features:
  * - Add new access points
  * - Edit existing access points
@@ -10,9 +12,6 @@
  */
 
 import { useState } from 'react';
-import WifiScanner from './WifiScanner';
-
-const API_BASE = 'http://localhost:3000'; // Base URL for API calls
 
 /**
  * Interface for WiFi access point data
@@ -27,10 +26,7 @@ interface WifiAccessPoint {
     tx_power: number;              // Transmission power in dBm at 1 meter
     notes?: string;                // Optional notes
 }
-const scanNetworks = async () => {
-  const { networks } = await WifiScanner.startScan();
-  console.log(networks); // [{ssid, bssid, rssi, frequency}, ...]
-};
+
 /**
  * Props for WifiAPManager component
  */
@@ -52,7 +48,7 @@ export default function WifiAPManager({ floorId, accessPoints, onAccessPointsCha
         bssid: '',
         x_coordinate: 0,
         y_coordinate: 0,
-        tx_power: +20,              // Typical WiFi router power
+        tx_power: -30,              // Typical WiFi router power
         notes: '',
     });
 
@@ -66,7 +62,7 @@ export default function WifiAPManager({ floorId, accessPoints, onAccessPointsCha
             bssid: '',
             x_coordinate: 0,
             y_coordinate: 0,
-            tx_power: +20,
+            tx_power: -30,
             notes: '',
         });
     };
@@ -98,7 +94,7 @@ export default function WifiAPManager({ floorId, accessPoints, onAccessPointsCha
         setLoading(true);
         try {
             // Determine if we're creating or updating
-            const endpoint = editingId ? `${API_BASE}/api/wifi-ap/${editingId}` : `${API_BASE}/api/wifi-ap`;
+            const endpoint = editingId ? `/api/wifi-ap/${editingId}` : '/api/wifi-ap';
             const method = editingId ? 'PUT' : 'POST';
 
             // Send request to API
@@ -110,7 +106,7 @@ export default function WifiAPManager({ floorId, accessPoints, onAccessPointsCha
                     'X-CSRF-Token': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
                 },
                 body: JSON.stringify({
-                    ...formData, bssid: formData.bssid?.toLowerCase(),
+                    ...formData,
                     floor_id: floorId,
                 }),
             });
@@ -121,7 +117,7 @@ export default function WifiAPManager({ floorId, accessPoints, onAccessPointsCha
             }
 
             // Refresh the access points list from server
-            const listResponse = await fetch(`${API_BASE}/api/floor/${floorId}/wifi-access-points`);
+            const listResponse = await fetch(`/api/floor/${floorId}/wifi-access-points`);
             const updatedAPs = await listResponse.json();
             onAccessPointsChange(updatedAPs);
 
@@ -147,7 +143,7 @@ export default function WifiAPManager({ floorId, accessPoints, onAccessPointsCha
         setLoading(true);
         try {
             // Send delete request
-            const response = await fetch(`${API_BASE}/api/wifi-ap/${id}`, {
+            const response = await fetch(`/api/wifi-ap/${id}`, {
                 method: 'DELETE',
                 headers: {
                     'X-CSRF-Token': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
@@ -161,7 +157,7 @@ export default function WifiAPManager({ floorId, accessPoints, onAccessPointsCha
 
             // Refresh list
             if (floorId) {
-                const listResponse = await fetch(`${API_BASE}/api/floor/${floorId}/wifi-access-points`);
+                const listResponse = await fetch(`/api/floor/${floorId}/wifi-access-points`);
                 const updatedAPs = await listResponse.json();
                 onAccessPointsChange(updatedAPs);
             }
@@ -247,11 +243,11 @@ export default function WifiAPManager({ floorId, accessPoints, onAccessPointsCha
                             </label>
                             <input
                                 type="number"
-                                value={formData.tx_power || +20}
+                                value={formData.tx_power || -30}
                                 onChange={(e) => setFormData({ ...formData, tx_power: Number(e.target.value) })}
                                 className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                             />
-                            <p className="text-xs text-gray-500 mt-1">Typical: +20 to +30 dBm</p>
+                            <p className="text-xs text-gray-500 mt-1">Typical: -30 to -20 dBm</p>
                         </div>
 
                         {/* Notes */}

@@ -21,6 +21,14 @@ export default defineConfig({
             formVariants: true,
         }),
     ],
+    server: {
+        host: 'localhost',
+        port:3000,
+        proxy: {
+            '/api': 'http://localhost:8000',
+            //changeOrigin: true,
+        },
+    },
     build: {
         rollupOptions: {
             external: ['mapbox-gl'],

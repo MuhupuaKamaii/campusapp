@@ -5,10 +5,16 @@ import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
+import com.getcapacitor.PermissionState;
 import com.getcapacitor.annotation.CapacitorPlugin;
-import broadcoast.BroadcastReceiver;
+import com.getcapacitor.annotation.Permission;
+import com.getcapacitor.annotation.PermissionCallback;
 
+import android.Manifest;
+import android.content.BroadcastReceiver;  
 import android.content.Context;
+import android.content.Intent;
+import android.content.IntentFilter;
 import android.net.wifi.ScanResult;
 import android.net.wifi.WifiManager;
 
@@ -16,16 +22,21 @@ import java.util.List;
 
 @CapacitorPlugin(name = "WifiPlugin", permissions = {
     @Permission(  alias = "location", strings = { Manifest.permission.ACCESS_FINE_LOCATION, 
-        Manifest.permission.ACCESS_wIFI_STATE,
-        Manifest.permission.CHANGE_WIFI_STATE
+        Manifest.permission.ACCESS_WIFI_STATE,
+        Manifest.permission.CHANGE_WIFI_STATE,
+        Manifest.permission.ACCESS_COARSE_LOCATION
     } )
 })
-public class WifiPlugin extends Plugin {
 
+public class WifiPlugin extends Plugin {
+    private WifiManager wifiManager;
     private PluginCall pendingCall;
 private BroadcastReceiver scanReceiver;
         @Override
         protected void handleOnStart(){
+            wifiManager = (WifiManager) getContext()
+                .getApplicationContext()
+                .getSystemService(Context.WIFI_SERVICE);
             scanReceiver = new BroadcastReceiver () {
                 @Override
                 public void onReceive(Context context, Intent intent) {
@@ -65,8 +76,9 @@ private BroadcastReceiver scanReceiver;
 
         if (wifiManager == null || !wifiManager.isWifiEnabled()) {
             call.reject("Wi-Fi is not enabled");
-            return;}
+            return;
         }
+
         wifiManager.startScan();
         List<ScanResult> results = wifiManager.getScanResults();
 
@@ -83,4 +95,13 @@ private BroadcastReceiver scanReceiver;
         JSObject response = new JSObject();
         response.put("networks", networks);
         call.resolve(response);
+}
+    @PermissionCallback
+    private void locationPermissionCallback(PluginCall call) {
+        if (getPermissionState("location") == PermissionState.GRANTED) {
+            startScan(call);
+        } else {
+            call.reject("Location permission is required to scan Wi-Fi networks");
+        }
+    }
 }

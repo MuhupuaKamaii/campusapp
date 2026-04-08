@@ -1,20 +1,22 @@
 /**
- * Indoor Navigation - WiFi-Based Positioning Page
+ * Indoor Navigation - Wayfinding System
  * 
- * This page provides WiFi-based indoor positioning and navigation:
- * - Real-time position tracking using WiFi RSSI triangulation
- * - WiFi access point management (CRUD operations)
- * - Calibration mode for signal fingerprinting
- * - Wi-Fi signal strength visualization
+ * This page provides PathPal-style indoor wayfinding with:
+ * - Location search with autocomplete
+ * - Shortest path calculation using Dijkstra's algorithm
+ * - Visual route display on SVG floor plans
+ * - Start/End location selection
+ * - Real-time location filtering
  */
 
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head } from '@inertiajs/react';
-import { useState, useEffect, useRef } from 'react';
-import WifiAPManager from '@/components/WifiAPManager';
-import WifiPositioning from '@/components/WifiPositioning';
-import { calculatePosition, applyKalmanFilter } from '@/utils/wifiTriangulation';
+import { useState, useEffect } from 'react';
+import SimpleFloorPlanViewer from '@/components/SimpleFloorPlanViewer';
+
+// API Configuration
+const API_BASE = 'http://127.0.0.1:8000';
 
 // Breadcrumb navigation
 const breadcrumbs: BreadcrumbItem[] = [
@@ -24,631 +26,469 @@ const breadcrumbs: BreadcrumbItem[] = [
     },
 ];
 
-/**
- * Building information - basic building data with coordinates
- */
-interface Building {
+// Floor configuration with IDs
+interface FloorConfig {
     id: number;
     name: string;
-    latitude: number;
-    longitude: number;
+    file: string;
 }
 
-/**
- * Floor data - represents a single floor within a building
- */
-interface Floor {
-    id: number;
-    building_id: number;  // Parent building
-    level: number;        // Floor number (-1 = basement, 0 = ground, 1 = first, etc.)
-    width: number;        // Floor plan width in pixels
-    height: number;       // Floor plan height in pixels
-}
+const FLOORS: FloorConfig[] = [
+    { id: 1, name: 'Basement Floor', file: 'Basement 1.5.svg' },
+    { id: 2, name: 'Ground Floor', file: 'Ground 1.5.svg' },
+    { id: 3, name: 'First Floor', file: 'First 1.5.svg' },
+    { id: 4, name: 'Second Floor', file: 'Second 1.5.svg' },
+];
 
-/**
- * WiFi Access Point - represents a real physical access point location
- */
-interface WifiAccessPoint {
+// Floor ID mapping
+const FLOOR_MAP: Record<number, number> = {
+    0: 1, // Basement
+    1: 2, // Ground
+    2: 3, // First
+    3: 4, // Second
+};
+
+interface Location {
     id: number;
-    floor_id: number;
-    ssid: string;                // Network name
-    bssid: string;               // MAC address (unique identifier)
-    x_coordinate: number;        // Position on floor plan
+    name: string;
+    type: string;
+    x_coordinate: number;
     y_coordinate: number;
-    tx_power: number;            // Transmission power in dBm at 1 meter
-    notes?: string;              // Optional notes
 }
 
-/**
- * WiFi Signal Reading - records RSSI measurement at a known location (for calibration)
- */
-interface WifiSignalReading {
-    id: number;
-    access_point_id: number;
-    x_coordinate: number;        // Calibration point location
-    y_coordinate: number;
-    rssi: number;                // Signal strength in dBm
-    measured_at: string;         // Timestamp
-}
-
-/**
- * User Position - calculated from WiFi trilateration
- */
-interface UserPosition {
-    x: number;                   // Estimated X coordinate
-    y: number;                   // Estimated Y coordinate
-    accuracy: number;            // Error radius in meters
-    timestamp: string;           // ISO timestamp of calculation
+interface Route {
+    path: Location[];
+    distance: number;
+    waypoints: Array<{ x: number; y: number }>;
 }
 
 export default function IndoorNavigationPage() {
-    // Main state
-    const [buildings, setBuildings] = useState<Building[]>([]);
-    const [selectedBuilding, setSelectedBuilding] = useState<number | null>(null);
-    const [floors, setFloors] = useState<Floor[]>([]);
-    const [selectedFloor, setSelectedFloor] = useState<number | null>(null);
+    // Floor state
+    const [selectedFloorIndex, setSelectedFloorIndex] = useState(2); // First Floor by default
+    const selectedFloor = FLOORS[selectedFloorIndex];
+    const floorId = FLOOR_MAP[selectedFloorIndex];
 
-    // Wi-Fi state
-    const [accessPoints, setAccessPoints] = useState<WifiAccessPoint[]>([]);
-    const [userPosition, setUserPosition] = useState<UserPosition | null>(null);
-    const [wifiSignals, setWifiSignals] = useState<any[]>([]);
-    const [isScanning, setIsScanning] = useState(false);
-    const [calibrationMode, setCalibrationMode] = useState(false);
-    const [calibrationLocation, setCalibrationLocation] = useState<{ x: number; y: number } | null>(null);
+    // Location data
+    const [locations, setLocations] = useState<Location[]>([]);
+    const [filteredLocations, setFilteredLocations] = useState<Location[]>([]);
 
-    // UI state
-    const [loading, setLoading] = useState(false);
-    const [activeTab, setActiveTab] = useState<'map' | 'aps' | 'calibrate'>('map');
-    const [scanInterval, setScanInterval] = useState(2000); // ms
-    const scanIntervalRef = useRef<NodeJS.Timeout | null>(null);
-    
-    // Reference to previous position for Kalman filtering (smooth tracking)
-    const previousPositionRef = useRef<UserPosition | null>(null);
+    // Search state
+    const [searchQuery, setSearchQuery] = useState('');
+    const [showSearchResults, setShowSearchResults] = useState(false);
 
-    /**
-     * Initialize: Load buildings on component mount
-     */
+    // Route state
+    const [startLocation, setStartLocation] = useState<Location | null>(null);
+    const [endLocation, setEndLocation] = useState<Location | null>(null);
+    const [route, setRoute] = useState<Route | null>(null);
+    const [routeError, setRouteError] = useState<string | null>(null);
+    const [calculating, setCalculating] = useState(false);
+    const [loadingLocations, setLoadingLocations] = useState(false);
+
+    // User position state for displaying on map
+    const [userPosition, setUserPosition] = useState<{ x: number; y: number; accuracy: number } | null>(null);
+
+    // Load locations when floor changes
     useEffect(() => {
-        setLoading(true);
-        fetch('/api/buildings')
-            .then(res => res.json())
-            .then(data => {
-                if (data && data.length > 0) {
-                    setBuildings(data);
-                    // Pre-select Library if available, otherwise first building
-                    const library = data.find((b: Building) => b.name.includes('Library'));
-                    setSelectedBuilding(library?.id || data[0].id);
-                }
-            })
-            .catch(err => console.error('Failed to load buildings:', err))
-            .finally(() => setLoading(false));
-    }, []);
-
-    /**
-     * Load floors when building is selected
-     */
-    useEffect(() => {
-        if (!selectedBuilding) return;
-
-        setLoading(true);
-        fetch(`/api/building/${selectedBuilding}/floors`)
-            .then(res => res.json())
-            .then(data => {
-                if (data && data.length > 0) {
-                    setFloors(data);
-                    setSelectedFloor(data[0].id);
-                }
-            })
-            .catch(err => console.error('Failed to load floors:', err))
-            .finally(() => setLoading(false));
-
-        // Clear position when building changes
-        setUserPosition(null);
-        setAccessPoints([]);
-    }, [selectedBuilding]);
-
-    /**
-     * Load Wi-Fi access points when floor is selected
-     */
-    useEffect(() => {
-        if (!selectedFloor) return;
-
-        setLoading(true);
-        fetch(`/api/floor/${selectedFloor}/wifi-access-points`)
-            .then(res => res.json())
-            .then(data => {
-                setAccessPoints(data || []);
-            })
-            .catch(err => console.error('Failed to load access points:', err))
-            .finally(() => setLoading(false));
-
-        // Clear position when floor changes
-        setUserPosition(null);
-    }, [selectedFloor]);
-
-    /**
-     * Start WiFi scanning for position calculation
-     * Scans for available WiFi networks at specified interval
-     */
-    const startWifiScanning = () => {
-        if (isScanning) return;
-        
-        setIsScanning(true);
-        console.log('📡 Starting Wi-Fi scan...');
-
-        // Create periodic scan interval
-        scanIntervalRef.current = setInterval(async () => {
+        const fetchLocations = async () => {
+            setLoadingLocations(true);
             try {
-                // Get WiFi networks visible to device
-                const networks = await getVisibleNetworks();
-                setWifiSignals(networks);
-
-                // Calculate position from RSSI measurements if we have enough data
-                if (networks.length > 0 && accessPoints.length > 0) {
-                    let position = calculatePosition(networks, accessPoints);
-                    
-                    if (position) {
-                        // Apply Kalman filter for smoother tracking
-                        position = applyKalmanFilter(previousPositionRef.current, position);
-                        previousPositionRef.current = position;
-                        
-                        setUserPosition(position);
-                        console.log(`📍 Position: (${position.x.toFixed(1)}, ${position.y.toFixed(1)}) ±${position.accuracy.toFixed(1)}m`);
-                        
-                        // Optionally log position to server for analytics
-                        if (selectedFloor) {
-                            logPositionToServer(position);
-                        }
-                    }
-                }
+                const response = await fetch(`${API_BASE}/api/floor/${floorId}/locations`);
+                if (!response.ok) throw new Error('Failed to fetch locations');
+                const data = await response.json();
+                setLocations(Array.isArray(data.data) ? data.data : []);
+                setRoute(null);
+                setStartLocation(null);
+                setEndLocation(null);
+                setSearchQuery('');
+                setRouteError(null);
             } catch (error) {
-                console.error('Wi-Fi scan error:', error);
+                console.error('Error fetching locations:', error);
+                setLocations([]);
+            } finally {
+                setLoadingLocations(false);
             }
-        }, scanInterval);
-    };
+        };
 
-    /**
-     * Stop WiFi scanning
-     */
-    const stopWifiScanning = () => {
-        if (scanIntervalRef.current) {
-            clearInterval(scanIntervalRef.current);
-            scanIntervalRef.current = null;
+        fetchLocations();
+    }, [floorId]);
+
+    // Filter locations based on search query
+    useEffect(() => {
+        if (searchQuery.trim() === '') {
+            setFilteredLocations([]);
+            setShowSearchResults(false);
+        } else {
+            const query = searchQuery.toLowerCase();
+            const filtered = locations.filter(loc =>
+                loc.name.toLowerCase().includes(query)
+            );
+            setFilteredLocations(filtered);
+            setShowSearchResults(true);
         }
-        setIsScanning(false);
-        console.log('⏹️ Wi-Fi scan stopped');
+    }, [searchQuery, locations]);
+
+    // Select location from search
+    const selectLocationAsStart = (location: Location) => {
+        setStartLocation(location);
+        setSearchQuery('');
+        setShowSearchResults(false);
+        setRoute(null);
+        setRouteError(null);
     };
 
-    /**
-     * Get visible WiFi networks from device or API
-     * This would integrate with native WiFi scanning capabilities
-     */
-    const getVisibleNetworks = async (): Promise<any[]> => {
-        try {
-            // Call backend API to scan for networks
-            // In production, this would have device-specific implementation
-            const response = await fetch('/api/scan-wifi-networks', {
-                method: 'GET',
-                headers: { 'Accept': 'application/json' },
-            });
-            
-            if (!response.ok) {
-                throw new Error('Failed to scan networks');
-            }
-
-            return await response.json();
-        } catch (error) {
-            console.warn('Wi-Fi scan not available:', error);
-            return [];
-        }
+    const selectLocationAsEnd = (location: Location) => {
+        setEndLocation(location);
     };
 
-    /**
-     * Log calculated position to server for analytics
-     * Optional: Saves position data for tracking and validation
-     */
-    const logPositionToServer = async (position: UserPosition) => {
-        try {
-            // Don't log too frequently to avoid overwhelming the server
-            // Only log every few position updates
-            if (Math.random() > 0.2) return; // Log 20% of positions
-
-            await fetch('/api/user-position', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRF-Token': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
-                },
-                body: JSON.stringify({
-                    floor_id: selectedFloor,
-                    x_coordinate: position.x,
-                    y_coordinate: position.y,
-                    accuracy: position.accuracy,
-                    signal_count: wifiSignals.length,
-                }),
-            });
-        } catch (error) {
-            // Silently fail - don't interrupt positioning if logging fails
-            console.debug('Position logging failed:', error);
-        }
-    };
-
-    /**
-     * Enter calibration mode for WiFi signal fingerprinting
-     * Users record signal strengths at known locations to improve accuracy
-     */
-    const startCalibration = () => {
-        setCalibrationMode(true);
-        setUserPosition(null);
-        console.log('🎯 Calibration mode started');
-    };
-
-    /**
-     * Record a WiFi signal fingerprint at a specific location
-     * Saves the RSSI values from all detected APs at this point
-     */
-    const recordCalibrationPoint = async (x: number, y: number) => {
-        if (!selectedFloor || wifiSignals.length === 0) {
-            alert('No Wi-Fi signals detected. Move to a location with signal.');
+    // Try to find user's current location (placeholder for future WiFi integration)
+    const findMyLocation = () => {
+        if (locations.length === 0) {
+            setRouteError('No locations available on this floor');
             return;
         }
 
-        setLoading(true);
-        try {
-            // Send calibration data to backend for storage
-            const response = await fetch('/api/floor/calibration-data', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRF-Token': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+        if (!navigator.geolocation) {
+            setStartLocation(locations[0]);
+            setRouteError(null);
+            return;
+        }
+
+        navigator.geolocation.getCurrentPosition(
+            (position) => {
+                const { latitude, longitude } = position.coords;
+                const locationsWithCoords = locations.filter(loc => loc.x_coordinate && loc.y_coordinate);
+
+                if (locationsWithCoords.length === 0) {
+                    setStartLocation(locations[0]);}
+                    else{
+                        setStartLocation(locations[0]);
+                    }
+                // In a real implementation, we would use WiFi/BLE signals to determine location
+        // For now, set to first location - in future integrate with WiFi positioning
+        setStartLocation(locations[0]);
+        setSearchQuery('');
+        setShowSearchResults(false);
+        console.log('GPS coords:', latitude, longitude);
                 },
-                body: JSON.stringify({
-                    floor_id: selectedFloor,
-                    x_coordinate: x,
-                    y_coordinate: y,
-                    // Include all signal strengths from detected APs
-                    signals: wifiSignals.map((s: any) => ({
-                        bssid: s.bssid,
-                        rssi: s.rssi,
-                    })),
-                }),
-            });
+            (error) => {
+                console.warn('GPS failed, using first location:', error.message);
+                setStartLocation(locations[0]);
+                setSearchQuery('');
+                setShowSearchResults(false);
+                setRouteError(null);
+            },
+            {timeout: 5000, maximumAge: 60000 }
+        );
+    };
 
-            if (!response.ok) {
-                throw new Error('Failed to save calibration data');
+    // Calculate route
+    const calculateRoute = async () => {
+        if (!startLocation || !endLocation) {
+            setRouteError('Please select both start and end locations');
+            return;
+        }
+
+        if (startLocation.id === endLocation.id) {
+            setRouteError('Start and end locations must be different');
+            return;
+        }
+
+        setCalculating(true);
+        setRouteError(null);
+
+        try {
+            const response = await fetch(
+                `${API_BASE}/api/path/${startLocation.id}/${endLocation.id}`
+            );
+            const data = await response.json();
+
+            if (!data.success) {
+                setRouteError(data.message || 'Could not calculate route');
+                setRoute(null);
+            } else {
+                setRoute(data.data);
+                setRouteError(null);
             }
-
-            const result = await response.json();
-            console.log(`✅ Calibration point recorded at (${x}, ${y})`);
-            alert(`Calibration point saved! Total: ${result.total_points}`);
         } catch (error) {
-            console.error('Calibration error:', error);
-            alert('Failed to save calibration data');
+            setRouteError('Error calculating route');
+            setRoute(null);
+            console.error('Route calculation error:', error);
         } finally {
-            setLoading(false);
+            setCalculating(false);
         }
     };
-
-    /**
-     * Exit calibration mode
-     */
-    const endCalibration = () => {
-        setCalibrationMode(false);
-        setCalibrationLocation(null);
-        console.log('✅ Calibration mode ended');
-    };
-
-    /**
-     * Handle floor plan click during calibration
-     * Records the clicked position for signal measurement
-     */
-    const handleMapClick = (e: React.MouseEvent<HTMLDivElement>) => {
-        const rect = e.currentTarget.getBoundingClientRect();
-        const x = e.clientX - rect.left;
-        const y = e.clientY - rect.top;
-
-        if (calibrationMode) {
-            setCalibrationLocation({ x, y });
-        }
-    };
-
-    const currentFloor = floors.find(f => f.id === selectedFloor);
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
-            <Head title="Indoor Navigation - Wi-Fi Based" />
-            <div className="flex h-full flex-1 flex-col gap-4 overflow-x-auto rounded-xl p-4">
-                <div className="grid auto-rows-min gap-4">
-                    <div className="relative overflow-hidden rounded-xl border border-sidebar-border/70 bg-white p-6 dark:border-sidebar-border">
-                        {/* Header */}
-                        <div className="mb-6 flex items-center justify-between">
-                            <div className="flex items-center gap-2">
-                                <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8.111 16.251a.375.375 0 01-.469.469l-2.08-2.08a.375.375 0 00-.53 0l-2.08 2.08a.375.375 0 01-.469-.469l2.08-2.08a.375.375 0 000-.53l-2.08-2.08a.375.375 0 01.469-.469l2.08 2.08a.375.375 0 00.53 0l2.08-2.08a.375.375 0 01.469.469l-2.08 2.08a.375.375 0 000 .53l2.08 2.08z" />
-                                </svg>
-                                <h3 className="font-semibold">Wi-Fi Indoor Navigation</h3>
-                            </div>
-                            {isScanning && (
-                                <div className="flex items-center gap-2 text-green-600">
-                                    <div className="h-2 w-2 rounded-full bg-green-600 animate-pulse"></div>
-                                    <span className="text-sm font-medium">Scanning...</span>
-                                </div>
-                            )}
-                        </div>
-
-                        {/* Tab Navigation */}
-                        <div className="mb-6 flex gap-2 border-b border-gray-200">
-                            <button
-                                onClick={() => setActiveTab('map')}
-                                className={`px-4 py-2 font-medium border-b-2 transition ${
-                                    activeTab === 'map'
-                                        ? 'border-blue-500 text-blue-600'
-                                        : 'border-transparent text-gray-600 hover:text-gray-900'
-                                }`}
-                            >
-                                📍 Position Map
-                            </button>
-                            <button
-                                onClick={() => setActiveTab('aps')}
-                                className={`px-4 py-2 font-medium border-b-2 transition ${
-                                    activeTab === 'aps'
-                                        ? 'border-blue-500 text-blue-600'
-                                        : 'border-transparent text-gray-600 hover:text-gray-900'
-                                }`}
-                            >
-                                📡 Access Points
-                            </button>
-                            <button
-                                onClick={() => setActiveTab('calibrate')}
-                                className={`px-4 py-2 font-medium border-b-2 transition ${
-                                    activeTab === 'calibrate'
-                                        ? 'border-blue-500 text-blue-600'
-                                        : 'border-transparent text-gray-600 hover:text-gray-900'
-                                }`}
-                            >
-                                🎯 Calibration
-                            </button>
-                        </div>
-
-                        {/* Building and Floor Selection */}
-                        <div className="mb-6 grid grid-cols-1 gap-4 lg:grid-cols-2">
-                            <div>
-                                <label htmlFor="building" className="block text-sm font-medium text-gray-700 mb-2">
-                                    Building
+            <Head title="Indoor Navigation" />
+            <div className="flex h-full flex-1 flex-col gap-4 overflow-visible rounded-xl p-4">
+                {/* Main Container - Vertical Layout */}
+                <div className="flex flex-col gap-4">
+                    {/* Top Row - Search, Floor, My Location */}
+                    <div className="flex gap-4">
+                        {/* Search Box - Same Size as Floor */}
+                        <div className="flex-1">
+                            <div className="rounded-xl border border-gray-300 bg-white p-4 dark:border-sidebar-border h-full">
+                                <label className="block text-sm font-semibold text-blue-700 mb-2">
+                                    🔍 Search
                                 </label>
-                                <div className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-md bg-gray-50">
-                                    <span className="text-sm font-medium text-gray-700"> NUST Library (Campus)</span>
-                                </div>
-                                <input
-                                    type="hidden"
-                                    id="building"
-                                    value={selectedBuilding || ''}
-                                />
-                            </div>
+                                <div className="relative">
+                                    <div className="flex items-center gap-2 border-2 border-blue-300 rounded-md px-3 py-2 bg-gray-50 focus-within:bg-white focus-within:border-blue-500">
+                                        <svg className="h-5 w-5 text-blue-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                                        </svg>
+                                        <input
+                                            type="text"
+                                            placeholder="Type location..."
+                                            value={searchQuery}
+                                            onChange={(e) => setSearchQuery(e.target.value)}
+                                            className="flex-1 bg-transparent text-sm font-medium text-gray-900 placeholder-gray-400 outline-none"
+                                        />
+                                        {searchQuery && (
+                                            <button
+                                                onClick={() => setSearchQuery('')}
+                                                className="text-gray-400 hover:text-gray-600"
+                                            >
+                                                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                                                </svg>
+                                            </button>
+                                        )}
+                                    </div>
 
-                            <div>
-                                <label htmlFor="floor" className="block text-sm font-medium text-gray-700 mb-2">
+                                    {/* Search Results Dropdown */}
+                                    {showSearchResults && filteredLocations.length > 0 && (
+                                        <div className="absolute top-full left-0 right-0 mt-2 bg-white border-2 border-blue-300 rounded-lg shadow-2xl z-50 max-h-64 overflow-y-auto">
+                                            <div className="p-2 bg-blue-50 border-b border-blue-200 sticky top-0">
+                                                <p className="text-xs font-semibold text-blue-700">
+                                                    {filteredLocations.length} result{filteredLocations.length !== 1 ? 's' : ''}
+                                                </p>
+                                            </div>
+                                            {filteredLocations.map((location) => (
+                                                <button
+                                                    key={location.id}
+                                                    onClick={() => selectLocationAsStart(location)}
+                                                    className="w-full text-left px-3 py-2 hover:bg-blue-100 text-sm border-b border-gray-200 last:border-b-0 transition"
+                                                >
+                                                    <div className="font-medium text-gray-900">{location.name}</div>
+                                                    <div className="text-xs text-gray-500">{location.type}</div>
+                                                </button>
+                                            ))}
+                                        </div>
+                                    )}
+
+                                    {/* No Results */}
+                                    {showSearchResults && searchQuery && filteredLocations.length === 0 && (
+                                        <div className="absolute top-full left-0 right-0 mt-2 bg-white border-2 border-yellow-300 rounded-lg shadow-lg p-2 z-50 text-xs">
+                                            <p className="text-gray-600">No locations found</p>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Floor Selector */}
+                        <div className="flex-1">
+                            <div className="rounded-xl border border-gray-300 bg-white p-4 dark:border-sidebar-border h-full">
+                                <label className="block text-sm font-semibold text-gray-700 mb-2">
                                     Floor
                                 </label>
                                 <select
-                                    id="floor"
-                                    value={selectedFloor || ''}
-                                    onChange={(e) => setSelectedFloor(Number(e.target.value))}
-                                    disabled={loading || floors.length === 0}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                                    value={selectedFloorIndex}
+                                    onChange={(e) => setSelectedFloorIndex(Number(e.target.value))}
+                                    className="w-full px-3 py-2 border-2 border-gray-300 rounded-md shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-base font-medium"
                                 >
-                                    <option value="">Select a floor...</option>
-                                    {floors.map(floor => (
-                                        <option key={floor.id} value={floor.id}>
-                                            Floor {floor.level}
+                                    {FLOORS.map((floor, index) => (
+                                        <option key={index} value={index}>
+                                            {floor.name}
                                         </option>
                                     ))}
                                 </select>
                             </div>
                         </div>
 
-                        {/* TAB: Position Map */}
-                        {activeTab === 'map' && (
-                            <>
-                                <div className="mb-4 flex gap-2">
-                                    {/* Start/Stop Scanning Button */}
-                                    <button
-                                        onClick={isScanning ? stopWifiScanning : startWifiScanning}
-                                        disabled={!selectedFloor}
-                                        className={`px-4 py-2 rounded font-medium transition ${
-                                            isScanning
-                                                ? 'bg-red-500 hover:bg-red-600 text-white'
-                                                : 'bg-green-500 hover:bg-green-600 text-white'
-                                        } disabled:bg-gray-300`}
-                                    >
-                                        {isScanning ? '⏹️ Stop Scanning' : '📡 Start Scanning'}
-                                    </button>
+                        {/* My Location Button */}
+                        <div className="flex-1">
+                            <button
+                                onClick={() => {
+                                    findMyLocation();
+                                    // Set user position at first location
+                                    if (locations.length > 0) {
+                                        setUserPosition({
+                                            x: locations[0].x_coordinate,
+                                            y: locations[0].y_coordinate,
+                                            accuracy: 30
+                                        });
+                                    }
+                                }}
+                                className="w-full h-full bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white px-4 py-2 rounded-lg font-bold text-sm flex items-center justify-center gap-2 shadow-lg transition transform hover:scale-105"
+                            >
+                                <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                                </svg>
+                                My Location
+                            </button>
+                        </div>
+                    </div>
 
-                                    {/* Scan Interval Selector */}
-                                    <select
-                                        value={scanInterval}
-                                        onChange={(e) => setScanInterval(Number(e.target.value))}
-                                        disabled={isScanning}
-                                        title="Lower values = more frequent scans (faster but uses more power)"
-                                        className="px-3 py-2 border border-gray-300 rounded text-sm font-medium"
-                                    >
-                                        <option value={1000}>⚡ 1 second (fast)</option>
-                                        <option value={2000}>⚙️ 2 seconds (balanced)</option>
-                                        <option value={3000}>⏳ 3 seconds (accurate)</option>
-                                        <option value={5000}>🔋 5 seconds (battery)</option>
-                                    </select>
+                    {/* Start & End Location Cards Row */}
+                    <div className="flex gap-4">
+                        {/* Start Location Card */}
+                        {startLocation && (
+                            <div className="flex-1">
+                                <div className="rounded-xl border border-green-300 bg-green-50 p-4 h-full">
+                                    <div className="flex items-start justify-between">
+                                        <div className="flex-1">
+                                            <div className="text-xs font-semibold text-green-700 mb-1">START</div>
+                                            <div className="font-semibold text-gray-900">{startLocation.name}</div>
+                                            <div className="text-xs text-gray-500 mt-1">{startLocation.type}</div>
+                                        </div>
+                                        <button
+                                            onClick={() => setStartLocation(null)}
+                                            className="text-gray-400 hover:text-gray-600"
+                                        >
+                                            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                                            </svg>
+                                        </button>
+                                    </div>
                                 </div>
-
-                                {/* Position Visualization */}
-                                <WifiPositioning
-                                    userPosition={userPosition}
-                                    accessPoints={accessPoints}
-                                    wifiSignals={wifiSignals}
-                                    floorWidth={currentFloor?.width || 800}
-                                    floorHeight={currentFloor?.height || 600}
-                                />
-                            </>
+                            </div>
                         )}
 
-                        {/* TAB: Access Points Management */}
-                        {activeTab === 'aps' && (
-                            <WifiAPManager
-                                floorId={selectedFloor}
-                                accessPoints={accessPoints}
-                                onAccessPointsChange={setAccessPoints}
-                            />
-                        )}
-
-                        {/* TAB: Calibration */}
-                        {activeTab === 'calibrate' && (
-                            <>
-                                <div className="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-                                    <h4 className="font-semibold text-blue-900 mb-2">Wi-Fi Fingerprinting Calibration</h4>
-                                    <p className="text-sm text-blue-700 mb-4">
-                                        Click on the map at specific locations and record the Wi-Fi signal strengths. This data helps improve positioning accuracy.
-                                    </p>
-                                    {!calibrationMode ? (
+                        {/* End Location Card */}
+                        {endLocation && (
+                            <div className="flex-1">
+                                <div className="rounded-xl border border-red-300 bg-red-50 p-4 h-full">
+                                    <div className="flex items-start justify-between">
+                                        <div className="flex-1">
+                                            <div className="text-xs font-semibold text-red-700 mb-1">END</div>
+                                            <div className="font-semibold text-gray-900">{endLocation.name}</div>
+                                            <div className="text-xs text-gray-500 mt-1">{endLocation.type}</div>
+                                        </div>
                                         <button
-                                            onClick={startCalibration}
-                                            disabled={!selectedFloor}
-                                            className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-gray-300 font-medium"
+                                            onClick={() => setEndLocation(null)}
+                                            className="text-gray-400 hover:text-gray-600"
                                         >
-                                             Start Calibration
+                                            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                                            </svg>
                                         </button>
-                                    ) : (
-                                        <button
-                                            onClick={endCalibration}
-                                            className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700 font-medium"
-                                        >
-                                            ✓ End Calibration
-                                        </button>
-                                    )}
+                                    </div>
                                 </div>
+                            </div>
+                        )}
+                    </div>
 
-                                {calibrationMode && (
-                                    <div className="mb-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-                                        <p className="text-sm text-yellow-700">
-                                             Calibration Mode Active - Click on the map to record signal strengths at specific locations
-                                        </p>
-                                        {calibrationLocation && (
-                                            <div className="mt-3 flex gap-2">
+                    {/* Middle Section - Location Selection and Route Controls */}
+                    <div className="flex gap-4">
+                        {/* Location Selection List */}
+                        {!startLocation && (
+                            <div className="flex-1">
+                                <div className="rounded-xl border border-sidebar-border/70 bg-white p-4 dark:border-sidebar-border h-full">
+                                    <h4 className="font-semibold text-gray-900 mb-3 text-sm">Select Start Location</h4>
+                                    <div className="space-y-2 max-h-48 overflow-y-auto">
+                                        {loadingLocations ? (
+                                            <div className="text-center py-4 text-gray-500">Loading locations...</div>
+                                        ) : locations.length === 0 ? (
+                                            <div className="text-center py-4 text-gray-500 text-sm">No locations available</div>
+                                        ) : (
+                                            locations.map(loc => (
                                                 <button
-                                                    onClick={() => recordCalibrationPoint(calibrationLocation.x, calibrationLocation.y)}
-                                                    disabled={loading}
-                                                    className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 disabled:bg-gray-300 font-medium text-sm"
+                                                    key={loc.id}
+                                                    onClick={() => selectLocationAsStart(loc)}
+                                                    className="w-full text-left px-3 py-2 rounded-md hover:bg-blue-50 border border-gray-200 hover:border-blue-300 transition"
                                                 >
-                                                    💾 Save Point at ({calibrationLocation.x.toFixed(0)}, {calibrationLocation.y.toFixed(0)})
+                                                    <div className="font-medium text-sm text-gray-900">{loc.name}</div>
+                                                    <div className="text-xs text-gray-500">{loc.type}</div>
                                                 </button>
-                                                <button
-                                                    onClick={() => setCalibrationLocation(null)}
-                                                    className="px-4 py-2 bg-gray-300 text-gray-700 rounded hover:bg-gray-400 text-sm"
-                                                >
-                                                    Cancel
-                                                </button>
-                                            </div>
+                                            ))
                                         )}
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {startLocation && !endLocation && (
+                            <div className="flex-1">
+                                <div className="rounded-xl border border-sidebar-border/70 bg-white p-4 dark:border-sidebar-border h-full">
+                                    <h4 className="font-semibold text-gray-900 mb-3 text-sm">Select End Location</h4>
+                                    <div className="space-y-2 max-h-48 overflow-y-auto">
+                                        {locations
+                                            .filter(loc => loc.id !== startLocation.id)
+                                            .map(loc => (
+                                                <button
+                                                    key={loc.id}
+                                                    onClick={() => selectLocationAsEnd(loc)}
+                                                    className="w-full text-left px-3 py-2 rounded-md hover:bg-red-50 border border-gray-200 hover:border-red-300 transition"
+                                                >
+                                                    <div className="font-medium text-sm text-gray-900">{loc.name}</div>
+                                                    <div className="text-xs text-gray-500">{loc.type}</div>
+                                                </button>
+                                            ))}
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Route and Info Section */}
+                        <div className="flex-1">
+                            <div className="space-y-4">
+                                {/* Calculate Route Button */}
+                                {startLocation && endLocation && (
+                                    <button
+                                        onClick={calculateRoute}
+                                        disabled={calculating}
+                                        className="w-full bg-blue-500 hover:bg-blue-600 disabled:bg-blue-300 text-white px-4 py-3 rounded-md font-semibold flex items-center justify-center gap-2"
+                                    >
+                                        <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                                        </svg>
+                                        {calculating ? 'Calculating...' : 'Calculate Route'}
+                                    </button>
+                                )}
+
+                                {/* Route Information */}
+                                {route && (
+                                    <div className="rounded-xl border border-blue-300 bg-blue-50 p-4">
+                                        <div className="mb-3">
+                                            <div className="text-sm font-semibold text-blue-900 mb-2">Route Information</div>
+                                            <div className="text-2xl font-bold text-blue-600">{route.distance.toFixed(1)}m</div>
+                                            <div className="text-xs text-blue-700 mt-1">{route.path.length} locations</div>
+                                        </div>
+                                        <div className="space-y-1 text-xs">
+                                            {route.path.map((loc, idx) => (
+                                                <div key={loc.id} className="text-gray-700">
+                                                    {idx + 1}. {loc.name}
+                                                </div>
+                                            ))}
+                                        </div>
                                     </div>
                                 )}
 
-                                {/* Calibration Map Display */}
-                                <WifiPositioning
-                                    userPosition={null}
-                                    accessPoints={accessPoints}
-                                    wifiSignals={wifiSignals}
-                                    floorWidth={currentFloor?.width || 800}
-                                    floorHeight={currentFloor?.height || 600}
-                                    calibrationMode={calibrationMode}
-                                    onMapClick={handleMapClick}
-                                    calibrationLocation={calibrationLocation}
-                                />
-                            </>
-                        )}
-
-                        {/* Debug Info - Move to bottom with better visibility */}
-                        {process.env.NODE_ENV === 'development' && (
-                            <div className="mt-8 rounded-lg border border-gray-300 bg-gray-50 p-4">
-                                <h4 className="mb-3 font-semibold text-gray-800">🐛 Debug Information</h4>
-                                <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-                                    {/* Column 1: Selection State */}
-                                    <div className="rounded bg-white p-3 border border-gray-200">
-                                        <p className="text-xs font-bold text-gray-600 mb-2">🏢 Selection</p>
-                                        <div className="space-y-1 text-xs font-mono text-gray-700">
-                                            <p>building: {selectedBuilding || 'none'}</p>
-                                            <p>floor: {selectedFloor || 'none'}</p>
-                                        </div>
-                                    </div>
-
-                                    {/* Column 2: Data Counts */}
-                                    <div className="rounded bg-white p-3 border border-gray-200">
-                                        <p className="text-xs font-bold text-gray-600 mb-2">📊 Counts</p>
-                                        <div className="space-y-1 text-xs font-mono text-gray-700">
-                                            <p>buildings: {buildings.length}</p>
-                                            <p>floors: {floors.length}</p>
-                                            <p>APs: {accessPoints.length}</p>
-                                            <p>signals: {wifiSignals.length}</p>
-                                        </div>
-                                    </div>
-
-                                    {/* Column 3: Scanning State */}
-                                    <div className="rounded bg-white p-3 border border-gray-200">
-                                        <p className="text-xs font-bold text-gray-600 mb-2">📡 Scanning</p>
-                                        <div className="space-y-1 text-xs font-mono text-gray-700">
-                                            <p>active: <span className={isScanning ? 'text-green-600 font-bold' : 'text-red-600'}>{isScanning ? 'YES' : 'NO'}</span></p>
-                                            <p>interval: {scanInterval}ms</p>
-                                            <p>calibration: <span className={calibrationMode ? 'text-yellow-600 font-bold' : 'text-gray-600'}>{calibrationMode ? 'ON' : 'OFF'}</span></p>
-                                        </div>
-                                    </div>
-
-                                    {/* Column 4: Position Data */}
-                                    <div className="rounded bg-white p-3 border border-gray-200">
-                                        <p className="text-xs font-bold text-gray-600 mb-2">📍 Position</p>
-                                        <div className="space-y-1 text-xs font-mono text-gray-700">
-                                            {userPosition ? (
-                                                <>
-                                                    <p>x: {userPosition.x.toFixed(1)}px</p>
-                                                    <p>y: {userPosition.y.toFixed(1)}px</p>
-                                                    <p>acc: ±{userPosition.accuracy.toFixed(2)}m</p>
-                                                </>
-                                            ) : (
-                                                <p className="text-gray-400">no position</p>
-                                            )}
-                                        </div>
-                                    </div>
-                                </div>
-
-                                {/* Detailed Signal Info */}
-                                {wifiSignals.length > 0 && (
-                                    <div className="mt-4 rounded bg-white p-3 border border-gray-200">
-                                        <p className="text-xs font-bold text-gray-600 mb-2">📶 Detected Signals</p>
-                                        <div className="max-h-40 overflow-y-auto">
-                                            <table className="w-full text-xs">
-                                                <thead>
-                                                    <tr className="bg-gray-100 border-b">
-                                                        <th className="text-left px-2 py-1">SSID</th>
-                                                        <th className="text-left px-2 py-1">BSSID</th>
-                                                        <th className="text-right px-2 py-1">RSSI</th>
-                                                    </tr>
-                                                </thead>
-                                                <tbody className="font-mono">
-                                                    {wifiSignals.slice(0, 10).map((signal: any, idx: number) => (
-                                                        <tr key={idx} className="border-b hover:bg-gray-50">
-                                                            <td className="px-2 py-1 text-gray-700">{signal.ssid || '?'}</td>
-                                                            <td className="px-2 py-1 text-gray-600 text-xs">{signal.bssid}</td>
-                                                            <td className="text-right px-2 py-1 font-bold text-green-600">{signal.rssi}dBm</td>
-                                                        </tr>
-                                                    ))}
-                                                </tbody>
-                                            </table>
-                                            {wifiSignals.length > 10 && (
-                                                <p className="text-center text-gray-500 mt-2 text-xs">
-                                                    +{wifiSignals.length - 10} more signals...
-                                                </p>
-                                            )}
-                                        </div>
+                                {/* Error Message */}
+                                {routeError && (
+                                    <div className="rounded-xl border border-red-300 bg-red-50 p-4">
+                                        <div className="text-sm font-semibold text-red-900">{routeError}</div>
                                     </div>
                                 )}
                             </div>
-                        )}
+                        </div>
+                    </div>
+
+                    {/* Bottom Section - Floor Plan Full Width */}
+                    <div className="w-full">
+                        <div className="rounded-xl border border-sidebar-border/70 bg-white p-6 dark:border-sidebar-border h-full min-h-96">
+                            <SimpleFloorPlanViewer
+                                floorName={selectedFloor.name}
+                                buildingName="Library"
+                                route={route}
+                                locations={locations}
+                                selectedStart={startLocation}
+                                selectedEnd={endLocation}
+                                userPosition={userPosition}
+                            />
+                        </div>
                     </div>
                 </div>
             </div>

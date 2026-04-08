@@ -1,8 +1,30 @@
 // Utility to build a graph from walkway GeoJSON and find shortest path
 // Only allows routing along walkways and through gates/doors
 
-import walkways from '../../public/data/nust-walkways.geojson';
-import gates from '../../public/data/nust-gates.geojson';
+let walkways = [];
+let gates = [];
+
+// Load GeoJSON data at runtime
+async function loadGeoData() {
+  if (walkways.length === 0) {
+    try {
+      const walkwaysRes = await fetch('/data/nust-walkways.geojson');
+      walkways = await walkwaysRes.json();
+    } catch (err) {
+      console.warn('Failed to load walkways GeoJSON:', err);
+      walkways = { features: [] };
+    }
+  }
+  if (gates.length === 0) {
+    try {
+      const gatesRes = await fetch('/data/nust-gates.geojson');
+      gates = await gatesRes.json();
+    } catch (err) {
+      console.warn('Failed to load gates GeoJSON:', err);
+      gates = { features: [] };
+    }
+  }
+}
 
 function haversine([lng1, lat1], [lng2, lat2]) {
   const R = 6371000;
@@ -17,7 +39,8 @@ function coordsKey([lng, lat]) {
   return `${lng.toFixed(6)},${lat.toFixed(6)}`;
 }
 
-export function buildGraph() {
+export async function buildGraph() {
+  await loadGeoData();
   const graph = {};
   function addEdge(a, b) {
     const keyA = coordsKey(a);
@@ -29,19 +52,23 @@ export function buildGraph() {
     graph[keyB].push({ to: keyA, coords: a, dist });
   }
   // Walkways
-  walkways.features.forEach(f => {
-    const coords = f.geometry.coordinates;
-    for (let i = 0; i < coords.length - 1; i++) {
-      addEdge(coords[i], coords[i + 1]);
-    }
-  });
+  if (walkways.features) {
+    walkways.features.forEach(f => {
+      const coords = f.geometry.coordinates;
+      for (let i = 0; i < coords.length - 1; i++) {
+        addEdge(coords[i], coords[i + 1]);
+      }
+    });
+  }
   // Gates (treat as walkable edges)
-  gates.features.forEach(f => {
-    const coords = f.geometry.coordinates;
-    for (let i = 0; i < coords.length - 1; i++) {
-      addEdge(coords[i], coords[i + 1]);
-    }
-  });
+  if (gates.features) {
+    gates.features.forEach(f => {
+      const coords = f.geometry.coordinates;
+      for (let i = 0; i < coords.length - 1; i++) {
+        addEdge(coords[i], coords[i + 1]);
+      }
+    });
+  }
   return graph;
 }
 
