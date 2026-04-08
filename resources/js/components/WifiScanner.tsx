@@ -1,4 +1,3 @@
-// src/plugins/WifiScanner.ts
 import { registerPlugin } from '@capacitor/core';
 import { WifiNetwork } from '@/Plugins/WifiPlugin';
 

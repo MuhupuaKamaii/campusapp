@@ -16,16 +16,18 @@ interface Route {
     waypoints: Array<{ x: number; y: number }>;
 }
 
+// REPLACE lines 19-36 with this:
 interface SimpleFloorPlanViewerProps {
     floorName?: string;
     buildingName?: string;
-    route?: Route | null;
     locations?: Location[];
+    route?: Route | null;
     selectedStart?: Location | null;
     selectedEnd?: Location | null;
     onLocationClick?: (location: Location) => void;
     userPosition?: { x: number; y: number; accuracy: number } | null;
-}
+}  
+
 
 export default function SimpleFloorPlanViewer({
     floorName = 'First',
@@ -165,7 +167,6 @@ export default function SimpleFloorPlanViewer({
                             height: 'auto',
                             display: 'block',
                             userSelect: 'none',
-                            WebkitUserDrag: 'none',
                         }}
                         draggable={false}
                     />
@@ -174,9 +175,7 @@ export default function SimpleFloorPlanViewer({
                     {imageLoaded && (
                         <svg
                             style={{
-                                position: 'absolute',
-                                top: 0,
-                                left: 0,
+
                                 width: '100%',
                                 height: '100%',
                                 pointerEvents: 'auto',
