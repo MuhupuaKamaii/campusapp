@@ -6,7 +6,7 @@ const config: CapacitorConfig = {
   appName: 'indoor-nav-mobile',
   webDir: 'build',
   server: {
-    url: 'http://127.0.0.1:3000',
+    url: 'http://192.168.1.94:8000',
     cleartext: true
   }
 };
