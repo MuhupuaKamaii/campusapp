@@ -1,0 +1,20 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "Bash(npx cap *)",
+      "Bash(adb devices *)",
+      "Bash(./gradlew assembleDebug)",
+      "Bash(./gradlew assembleDebug --stacktrace)",
+      "Bash(./gradlew --stop)",
+      "Bash(./gradlew clean *)",
+      "Bash(java -version)",
+      "Bash(where java *)",
+      "Read(//c/Program Files/Android/Android Studio/jbr/bin/**)",
+      "Bash(\"C:/Program Files/Android/Android Studio/jbr/bin/java.exe\" -version)",
+      "Bash(JAVA_HOME=\"C:/Program Files/Android/Android Studio/jbr\" ./gradlew clean assembleDebug)",
+      "Bash(adb -s HZQL1838KAL40600156 install -r c:/laragon/www/campusapp/android/app/build/outputs/apk/debug/app-debug.apk)",
+      "Bash(ipconfig)"
+    ]
+  }
+}

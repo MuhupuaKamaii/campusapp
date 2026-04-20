@@ -59,7 +59,12 @@ export const firstFloorGraphData: GraphData = {
     { id: 44, name: 'v31',  type: 'walkway', cx: 465.33,  cy: 413.235, floor_id: 3 },
     { id: 45, name: 'v32',  type: 'walkway', cx: 522.90,  cy: 425.63,  floor_id: 3 },
     { id: 46, name: 'v33',  type: 'walkway', cx: 522.90,  cy: 422.85,  floor_id: 3 },
-    { id: 47, name: 'v34',  type: 'walkway', cx: 522.90,  cy: 459.36,  floor_id: 3 },
+    { id: 47, name: 'v34',                  type: 'walkway', cx: 522.90,  cy: 459.36,  floor_id: 3 },
+
+    // ── Inter-floor stair nodes ────────────────────────────────────
+    { id: 48, name: 'Stairs to Basement',    type: 'exit', cx: 396.960, cy: 241.440, floor_id: 3 },
+    { id: 49, name: 'Bridge Stairs (lower)', type: 'exit', cx: 353.49,  cy: 221.04,  floor_id: 3 },
+    { id: 50, name: 'Bridge Stairs (upper)', type: 'exit', cx: 353.49,  cy: 200.87,  floor_id: 3 },
   ],
 
   edges: [
@@ -128,5 +133,10 @@ export const firstFloorGraphData: GraphData = {
     { id: 52, from: 11, to: 45, distance: 17 },  // Cubicle 6 → v32
     { id: 53, from: 12, to: 47, distance: 10 },  // Cubicle 7 → v34
     { id: 54, from: 13, to: 47, distance: 9 },   // Cubicle 8 → v34
+
+    // ── Inter-floor stair connections ─────────────────────────────
+    { id: 55, from: 48, to: 32, distance: 30 },  // Stairs to Basement → v19
+    { id: 56, from: 49, to: 25, distance: 22 },  // Bridge Stairs lower → v11
+    { id: 57, from: 50, to: 49, distance: 20 },  // Bridge Stairs upper → lower
   ],
 };

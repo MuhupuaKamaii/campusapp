@@ -1,4 +1,6 @@
 import { firstFloorGraphData } from './firstFloorGraphData';
+import { secondFloorGraphData } from './secondFloorGraphData';
+import { basementFloorGraphData } from './basementFloorGraphData';
 
 export interface CampusVertex {
   id: number;
@@ -30,8 +32,9 @@ export interface GraphData {
  */
 export function getGraphDataByFloorId(floorId: number): GraphData {
   switch (floorId) {
-    case 3:
-      return firstFloorGraphData;
+    case 1: return basementFloorGraphData;
+    case 3: return firstFloorGraphData;
+    case 4: return secondFloorGraphData;
     default:
       throw new Error(`Floor ${floorId} graph data not found`);
   }

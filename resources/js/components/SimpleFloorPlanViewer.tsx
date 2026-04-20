@@ -10,6 +10,7 @@ interface Location {
     x_coordinate: number;
     y_coordinate: number;
     floor_id?: number;
+    floorId: number;
 }
 
 interface Route {
@@ -31,10 +32,10 @@ interface SimpleFloorPlanViewerProps {
 }
 
 const FLOOR_DIMENSIONS: Record<string, { width: number; height: number }> = {
-    'basement': { width: 765.12, height: 540.15995 },
-    'ground':   { width: 765.12, height: 540.15995 },
+    'basement': { width: 1588, height: 1122.6667 },
+    'ground':   { width: 1588, height: 1122.6667 },
     'first':    { width: 765.12, height: 540.15995 },
-    'second':   { width: 765.12, height: 540.15995 },
+    'second':   { width: 1588, height: 1122.6667 },
 };
 
 const FLOOR_NAME_TO_ID: Record<string, number> = {
@@ -121,7 +122,7 @@ export default function SimpleFloorPlanViewer({
         <div className="w-full space-y-4">
             {/* Header */}
             <div className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm">
-                <h2 className="text-lg font-semibold text-gray-800">{buildingName} — {floorName} Floor</h2>
+                <h2 className="text-lg font-semibold text-gray-800">{buildingName} — {floorName}</h2>
                 <p className="text-sm text-gray-500 mt-1">
                     {locations.length} locations{route && ` · Route: ${route.distance.toFixed(1)} m`}
                 </p>
