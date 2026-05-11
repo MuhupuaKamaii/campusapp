@@ -1,7 +1,5 @@
 /**
  * Indoor Navigation - Wayfinding System
- * 
- * This page provides PathPal-style indoor wayfinding with:
  * - Location search with autocomplete
  * - Shortest path calculation using Dijkstra's algorithm
  * - Visual route display on SVG floor plans
@@ -16,6 +14,7 @@ import { useState, useMemo } from 'react';
 import SimpleFloorPlanViewer from '@/components/SimpleFloorPlanViewer';
 import { getFloorGraphData, findPathOnGraph } from '../services/graphData';
 import { getTransitions } from '../services/floorTransitions';
+import { BUILDINGS } from '../services/buildings';
 
 
 // Breadcrumb navigation
@@ -26,27 +25,6 @@ const breadcrumbs: BreadcrumbItem[] = [
     },
 ];
 
-// Floor configuration with IDs
-interface FloorConfig {
-    id: number;
-    name: string;
-    file: string;
-}
-
-const FLOORS: FloorConfig[] = [
-    { id: 1, name: 'Basement Floor', file: 'Basement 1.5.svg' },
-    { id: 2, name: 'Ground Floor', file: 'Ground 1.5.svg' },
-    { id: 3, name: 'First Floor', file: 'First 1.5.svg' },
-    { id: 4, name: 'Second Floor', file: 'Second 1.5.svg' },
-];
-
-// Floor ID mapping
-const FLOOR_MAP: Record<number, number> = {
-    0: 1, // Basement
-    1: 2, // Ground
-    2: 3, // First
-    3: 4, // Second
-};
 
 interface Location {
     id: number;
@@ -83,9 +61,31 @@ interface CrossFloorRoute {
 }
 
 export default function IndoorNavigationPage() {
-    const [selectedFloorIndex, setSelectedFloorIndex] = useState(2); // First Floor by default
-    const selectedFloor = FLOORS[selectedFloorIndex];
-    const floorId = FLOOR_MAP[selectedFloorIndex];
+    const [selectedBuildingId, setSelectedBuildingId] = useState('library');
+    const selectedBuilding = BUILDINGS.find(b => b.id === selectedBuildingId) ?? BUILDINGS[0];
+
+    // Derived equivalents of the old module-level constants — update when building changes
+    const FLOORS = selectedBuilding.floors.map(f => ({ id: f.floorId, name: f.name, file: f.svgFile }));
+    const FLOOR_MAP: Record<number, number> = Object.fromEntries(selectedBuilding.floors.map((f, i) => [i, f.floorId]));
+
+    const [selectedFloorIndex, setSelectedFloorIndex] = useState(
+        selectedBuilding.floors.findIndex(f => f.name === 'First Floor') !== -1
+            ? selectedBuilding.floors.findIndex(f => f.name === 'First Floor')
+            : 0
+    );
+    const floorId = FLOOR_MAP[selectedFloorIndex] ?? selectedBuilding.floors[0].floorId;
+
+    const handleBuildingChange = (buildingId: string) => {
+        setSelectedBuildingId(buildingId);
+        setSelectedFloorIndex(0);
+        setEndLocation(null);
+        setRoute(null);
+        setCrossFloorRoute(null);
+        setRouteError(null);
+        setStartLocation(null);
+        setUserPosition(null);
+        setPickingStart(false);
+    };
 
     const handleFloorChange = (index: number) => {
         setSelectedFloorIndex(index);
@@ -164,7 +164,7 @@ export default function IndoorNavigationPage() {
     }, [route, crossFloorRoute, startLocation, endLocation]);
 
     // Floors that have graph data (used for 2-hop routing)
-    const GRAPH_FLOOR_IDS = [1, 3, 4];
+    const GRAPH_FLOOR_IDS = selectedBuilding.floors.map(f => f.floorId);
 
     // Build waypoints array from a path result + graph
     const toWaypoints = (nodeIds: number[], graph: ReturnType<typeof getFloorGraphData>) =>
@@ -176,7 +176,7 @@ export default function IndoorNavigationPage() {
         const toGraph   = getFloorGraphData(toFloorId);
 
         // ── 1-hop: direct transition ─────────────────────────────────
-        const directCandidates = getTransitions(fromFloorId, toFloorId);
+        const directCandidates = getTransitions(fromFloorId, toFloorId, selectedBuildingId);
         let best1: { trans: ReturnType<typeof getTransitions>[0]; r1: ReturnType<typeof findPathOnGraph>; r2: ReturnType<typeof findPathOnGraph>; total: number } | null = null;
 
         for (const trans of directCandidates) {
@@ -213,8 +213,8 @@ export default function IndoorNavigationPage() {
 
         for (const midFloorId of GRAPH_FLOOR_IDS) {
             if (midFloorId === fromFloorId || midFloorId === toFloorId) continue;
-            const toMid   = getTransitions(fromFloorId, midFloorId);
-            const fromMid = getTransitions(midFloorId, toFloorId);
+            const toMid   = getTransitions(fromFloorId, midFloorId, selectedBuildingId);
+            const fromMid = getTransitions(midFloorId, toFloorId, selectedBuildingId);
             if (!toMid.length || !fromMid.length) continue;
 
             const midGraph = getFloorGraphData(midFloorId);
@@ -458,21 +458,35 @@ export default function IndoorNavigationPage() {
                         </div>
                     )}
 
+                    {/* Building selector */}
+                    {BUILDINGS.length > 1 && (
+                        <div className="flex gap-2">
+                            {BUILDINGS.map(b => (
+                                <button
+                                    key={b.id}
+                                    onClick={() => handleBuildingChange(b.id)}
+                                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition
+                                        ${selectedBuildingId === b.id
+                                            ? 'bg-indigo-600 text-white border-indigo-600'
+                                            : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'}`}
+                                >
+                                    {b.name}
+                                </button>
+                            ))}
+                        </div>
+                    )}
+
                     {/* Floor selector tabs */}
                     <div className="flex gap-2">
                         {FLOORS.map((floor, i) => {
-                            const hasGraph = FLOOR_MAP[i] !== 2; // Ground Floor has no graph yet
                             return (
                                 <button
                                     key={floor.id}
-                                    onClick={() => hasGraph && handleFloorChange(i)}
-                                    disabled={!hasGraph}
+                                    onClick={() => handleFloorChange(i)}
                                     className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition
                                         ${selectedFloorIndex === i
                                             ? 'bg-blue-600 text-white border-blue-600'
-                                            : hasGraph
-                                                ? 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'
-                                                : 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed'}`}
+                                            : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'}`}
                                 >
                                     {floor.name.replace(' Floor', '')}
                                 </button>
@@ -598,8 +612,8 @@ export default function IndoorNavigationPage() {
                     <div className="w-full">
                         <div className="rounded-xl border border-sidebar-border/70 bg-white p-6 dark:border-sidebar-border h-full min-h-96">
                             <SimpleFloorPlanViewer
-                                floorName={selectedFloor.name}
-                                buildingName="Library"
+                                floorConfig={selectedBuilding.floors[selectedFloorIndex] ?? selectedBuilding.floors[0]}
+                                buildingName={selectedBuilding.name}
                                 route={(() => {
                                     if (!crossFloorRoute) return route;
                                     const leg = crossFloorRoute.legs.find(l => l.floorId === floorId);

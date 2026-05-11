@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { TransformWrapper, TransformComponent, useControls } from 'react-zoom-pan-pinch';
 import '../../css/AnimatedPath.css';
 import { getFloorGraphData, type GraphData } from '../services/graphData';
+import type { BuildingFloor } from '../services/buildings';
 
 interface Location {
     id: number;
@@ -20,7 +21,7 @@ interface Route {
 }
 
 interface SimpleFloorPlanViewerProps {
-    floorName?: string;
+    floorConfig: BuildingFloor;
     buildingName?: string;
     route?: Route | null;
     locations?: Location[];
@@ -30,20 +31,6 @@ interface SimpleFloorPlanViewerProps {
     pickingStart?: boolean;
     onStartPicked?: (location: Location) => void;
 }
-
-const FLOOR_DIMENSIONS: Record<string, { width: number; height: number }> = {
-    'basement': { width: 1588, height: 1122.6667 },
-    'ground':   { width: 1588, height: 1122.6667 },
-    'first':    { width: 765.12, height: 540.15995 },
-    'second':   { width: 1588, height: 1122.6667 },
-};
-
-const FLOOR_NAME_TO_ID: Record<string, number> = {
-    'basement floor': 1, 'basement': 1,
-    'ground floor': 2,   'ground': 2,
-    'first floor': 3,    'first': 3,
-    'second floor': 4,   'second': 4,
-};
 
 const NODE_COLORS: Record<string, string> = {
     entrance:   '#22C55E',
@@ -68,12 +55,6 @@ const LEGEND_TYPES = [
     { type: 'walkway',  label: 'Walkway' },
 ];
 
-const SVG_FILE_MAP: Record<string, string> = {
-    'basement': 'Basement 1.5.svg',
-    'ground':   'Ground 1.5.svg',
-    'first':    'First 1.5.svg',
-    'second':   'Second 1.5.svg',
-};
 
 // Inner controls component — must be used inside TransformWrapper
 function ZoomControls({ onToggleGraph, showGraph }: { onToggleGraph: () => void; showGraph: boolean }) {
@@ -94,8 +75,8 @@ function ZoomControls({ onToggleGraph, showGraph }: { onToggleGraph: () => void;
 }
 
 export default function SimpleFloorPlanViewer({
-    floorName = 'First',
-    buildingName = 'Library',
+    floorConfig,
+    buildingName = 'Building',
     route = null,
     locations = [],
     selectedStart = null,
@@ -106,14 +87,11 @@ export default function SimpleFloorPlanViewer({
 }: SimpleFloorPlanViewerProps) {
     const [showGraphOverlay, setShowGraphOverlay] = useState(false);
 
-    const floorKey = floorName.toLowerCase().replace(' floor', '').trim();
-    const { width: svgW, height: svgH } = FLOOR_DIMENSIONS[floorKey] ?? { width: 765.12, height: 540.15995 };
-    const svgFile = SVG_FILE_MAP[floorKey] ?? 'First 1.5.svg';
+    const { svgWidth: svgW, svgHeight: svgH, svgFile, floorId, name: floorName } = floorConfig;
 
     let graphData: GraphData | null = null;
     try {
-        const floorId = FLOOR_NAME_TO_ID[floorName.toLowerCase()];
-        if (floorId) graphData = getFloorGraphData(floorId);
+        graphData = getFloorGraphData(floorId);
     } catch {
         graphData = null;
     }
@@ -130,11 +108,11 @@ export default function SimpleFloorPlanViewer({
 
             <TransformWrapper
                 centerOnInit
-                minScale={0.4}
-                maxScale={6}
+                minScale={0.6}
+                maxScale={3}
                 smooth
                 doubleClick={{ mode: 'reset' }}
-                wheel={{ step: 0.1 }}
+                wheel={{ step: 0.03 }}
             >
                 {/* Controls bar sits inside TransformWrapper so useControls works */}
                 <div className="flex items-center gap-3 bg-white p-3 rounded-lg border border-gray-200 shadow-sm flex-wrap">

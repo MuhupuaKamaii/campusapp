@@ -1,7 +1,6 @@
 import { GraphData } from './graphData';
 
 // SVG viewBox: 0 0 1588 1122.6667
-// Coordinates provided by user (comma = decimal separator converted to dot).
 export const basementFloorGraphData: GraphData = {
   floorId: 1,
   floorName: 'Basement Floor',
@@ -38,6 +37,7 @@ export const basementFloorGraphData: GraphData = {
     { id: 25, name: 'v19', type: 'walkway', cx: 966.18,  cy: 570.22,  floor_id: 1 },
     { id: 26, name: 'v20',              type: 'walkway', cx: 966.18,  cy: 659.36,  floor_id: 1 },
     { id: 27, name: 'Stairs to First Floor', type: 'exit', cx: 885.76,  cy: 533.00,  floor_id: 1 },
+    { id: 28, name: 'Stairs to Ground Floor', type: 'exit', cx: 817.717, cy: 521.575, floor_id: 1 },
   ],
 
   edges: [
@@ -87,8 +87,9 @@ export const basementFloorGraphData: GraphData = {
     // ── Book Acquisitions ──────────────────────────────────────────
     { id: 23, from: 26, to: 4,  distance: 22  },  // v20 → Book Acquisitions (same y=659)
 
-    // ── Stairs to First Floor ──────────────────────────────────────
-    { id: 30, from: 27, to: 23, distance: 59  },  // Stairs → v17 (same y≈533)
+    // ── Stairs connections ─────────────────────────────────────────
+    { id: 30, from: 27, to: 23, distance: 59  },  // Stairs to First → v17 (same y≈533)
+    { id: 31, from: 28, to: 27, distance: 69  },  // Stairs to Ground → Stairs to First
 
     // ── Lower section (entry/exit corridor) ───────────────────────
     { id: 24, from: 8,  to: 9,  distance: 105 },  // v2 → v3 (diagonal)

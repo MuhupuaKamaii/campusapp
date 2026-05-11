@@ -1,6 +1,5 @@
-import { firstFloorGraphData } from './firstFloorGraphData';
-import { secondFloorGraphData } from './secondFloorGraphData';
-import { basementFloorGraphData } from './basementFloorGraphData';
+import { getFloorGraph } from './graphRegistry';
+import './library/index'; // side-effect: registers all Library floors
 
 export interface CampusVertex {
   id: number;
@@ -31,13 +30,7 @@ export interface GraphData {
  * @returns GraphData for the requested floor
  */
 export function getGraphDataByFloorId(floorId: number): GraphData {
-  switch (floorId) {
-    case 1: return basementFloorGraphData;
-    case 3: return firstFloorGraphData;
-    case 4: return secondFloorGraphData;
-    default:
-      throw new Error(`Floor ${floorId} graph data not found`);
-  }
+  return getFloorGraph(floorId);
 }
 
 // Alias for consistency
